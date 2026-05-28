@@ -31,6 +31,21 @@ export async function onRequest(context) {
     const cfPages = await cfPagesRes.json();
     const cfProjects = cfPages.result || [];
 
+    // DEBUG: return CF API response to diagnose matching issue
+    if (context.request.url.includes('?debug')) {
+      return new Response(JSON.stringify({
+        cfSuccess: cfPages.success,
+        cfErrors: cfPages.errors,
+        cfProjectNames: cfProjects.map(p => ({
+          name: p.name,
+          subdomain: p.subdomain,
+          source_repo: p.source?.config?.repo_name
+        }))
+      }, null, 2), {
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
     const results = await Promise.all(repos.map(async (repo) => {
       const headers = {
         Authorization: `Bearer ${githubToken}`,
@@ -58,7 +73,6 @@ export async function onRequest(context) {
       const prs = Array.isArray(issues) ? issues.filter(i => i.pull_request) : [];
       const openIssues = Array.isArray(issues) ? issues.filter(i => !i.pull_request) : [];
 
-      // Match Cloudflare Pages project by repo name
       const cfProject = cfProjects.find(p =>
         p.name === repo ||
         p.source?.config?.repo_name === repo ||
