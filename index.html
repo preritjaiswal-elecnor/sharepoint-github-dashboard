@@ -20,10 +20,13 @@
   .repo-desc { font-size: 12px; color: #888; }
   .repo-link { font-size: 11px; color: #4ade80; text-decoration: none; flex-shrink: 0; margin-top: 2px; border: 1.5px solid #4ade80; border-radius: 99px; padding: 3px 10px; display: inline-flex; align-items: center; gap: 4px; font-weight: 500; transition: background 0.15s, color 0.15s; }
   .repo-link:hover { background: #4ade80; color: #111; }
-  .repo-stats { display: flex; gap: 16px; padding: 0.75rem 1.25rem; border-bottom: 0.5px solid #f0f0f0; }
-  .repo-stat { text-align: center; }
-  .repo-stat-value { font-size: 18px; font-weight: 600; }
-  .repo-stat-label { font-size: 11px; color: #888; margin-top: 2px; }
+  .repo-stats { display: flex; gap: 0; padding: 0; border-bottom: 0.5px solid #f0f0f0; }
+  .repo-stat { text-align: center; flex: 1; padding: 0.75rem 0.5rem; border-right: 0.5px solid #f0f0f0; }
+  .repo-stat:last-child { border-right: none; }
+  .repo-stat-value { font-size: 17px; font-weight: 600; }
+  .repo-stat-label { font-size: 10px; color: #888; margin-top: 2px; }
+  .security-icon { display: flex; align-items: center; justify-content: center; margin-bottom: 1px; }
+  .security-icon svg { width: 20px; height: 20px; }
   .repo-section { padding: 0.75rem 1.25rem; border-bottom: 0.5px solid #f0f0f0; }
   .repo-section:last-child { border-bottom: none; }
   .section-title { font-size: 11px; font-weight: 500; color: #aaa; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px; }
@@ -68,6 +71,7 @@
     body { background: #111; color: #eee; }
     .repo-card { background: #1c1c1e; border-color: #2c2c2e; }
     .repo-header, .repo-stats, .repo-section, .deployment { border-color: #2c2c2e; }
+    .repo-stat { border-color: #2c2c2e; }
     .repo-name, .dep-env, .contrib-name, .commit-msg { color: #eee; }
     .commit-sha { background: #2c2c2e; color: #aaa; }
     .badge-idle { background: #2c2c2e; color: #888; }
@@ -129,6 +133,20 @@ function langBar(languages) {
   return `<div class="lang-bar">${bars}</div><div class="lang-legend">${legend}</div>`;
 }
 
+function securityIcon(lastPush) {
+  let color, title;
+  if (!lastPush) { color = '#888'; title = 'No push data'; }
+  else {
+    const days = (Date.now() - new Date(lastPush)) / 86400000;
+    if (days <= 30)      { color = '#4ade80'; title = `Active · ${Math.floor(days)}d ago`; }
+    else if (days <= 90) { color = '#fbbf24'; title = `Stale · ${Math.floor(days)}d ago`; }
+    else                 { color = '#f87171'; title = `Inactive · ${Math.floor(days)}d ago`; }
+  }
+  return `<svg viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" title="${title}">
+    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+  </svg>`;
+}
+
 function deployBorderClass(deployments) {
   if (!deployments || !deployments.length) return '';
   const s = (deployments[0].status || '').toLowerCase();
@@ -183,10 +201,22 @@ function renderRepo(repo) {
         ${liveUrl}
       </div>
       <div class="repo-stats">
-        <div class="repo-stat"><div class="repo-stat-value" style="color:#E24B4A">${repo.openIssuesCount}</div><div class="repo-stat-label">Open issues</div></div>
-        <div class="repo-stat"><div class="repo-stat-value" style="color:#378ADD">${repo.openPRsCount}</div><div class="repo-stat-label">Open PRs</div></div>
-        <div class="repo-stat"><div class="repo-stat-value" style="color:#1D9E75">${repo.stars}</div><div class="repo-stat-label">Stars</div></div>
-        <div class="repo-stat"><div class="repo-stat-value" style="color:#D85A30">${repo.forks}</div><div class="repo-stat-label">Forks</div></div>
+        <div class="repo-stat">
+          <div class="repo-stat-value" style="color:#378ADD">${repo.totalCommits ?? repo.commits?.length ?? '—'}</div>
+          <div class="repo-stat-label">Total Commits</div>
+        </div>
+        <div class="repo-stat">
+          <div class="security-icon">${securityIcon(repo.lastPush)}</div>
+          <div class="repo-stat-label">Health</div>
+        </div>
+        <div class="repo-stat">
+          <div class="repo-stat-value" style="color:#378ADD">${repo.openPRsCount}</div>
+          <div class="repo-stat-label">Active PRs</div>
+        </div>
+        <div class="repo-stat">
+          <div class="repo-stat-value" style="color:#E24B4A">${repo.openIssuesCount}</div>
+          <div class="repo-stat-label">Active Issues</div>
+        </div>
       </div>
       ${repo.cfProjectUrl ? `
       <div class="live-url-strip">
