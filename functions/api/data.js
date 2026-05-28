@@ -20,7 +20,7 @@ export async function onRequest(context) {
 
     // Fetch all Cloudflare Pages projects once
     const cfPagesRes = await fetch(
-      `https://api.cloudflare.com/client/v4/accounts/${cfAccountId}/pages/projects?per_page=25`,
+      `https://api.cloudflare.com/client/v4/accounts/${cfAccountId}/pages/projects`,
       {
         headers: {
           Authorization: `Bearer ${cfToken}`,
