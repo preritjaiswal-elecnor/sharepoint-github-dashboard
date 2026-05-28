@@ -12,9 +12,10 @@
   .subtitle { font-size: 13px; color: #888; margin-bottom: 1.5rem; }
   .repo-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 16px; }
   .repo-card { background: #fff; border: 0.5px solid #e0e0e0; border-radius: 12px; overflow: hidden; }
-  .repo-header { padding: 1rem 1.25rem 0.75rem; border-bottom: 0.5px solid #f0f0f0; }
+  .repo-header { padding: 1rem 1.25rem 0.75rem; border-bottom: 0.5px solid #f0f0f0; display: flex; justify-content: space-between; align-items: flex-start; }
   .repo-name { font-size: 15px; font-weight: 600; color: #1a1a1a; margin-bottom: 4px; }
   .repo-desc { font-size: 12px; color: #888; }
+  .repo-link { font-size: 11px; color: #378ADD; text-decoration: none; flex-shrink: 0; margin-top: 2px; }
   .repo-stats { display: flex; gap: 16px; padding: 0.75rem 1.25rem; border-bottom: 0.5px solid #f0f0f0; }
   .repo-stat { text-align: center; }
   .repo-stat-value { font-size: 18px; font-weight: 600; }
@@ -33,11 +34,19 @@
   .lang-bar { display: flex; height: 6px; border-radius: 3px; overflow: hidden; margin-bottom: 8px; }
   .lang-legend { display: flex; flex-wrap: wrap; gap: 8px; font-size: 11px; color: #666; }
   .lang-dot { width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; }
-  .deployment { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px; color: #555; }
-  .dep-env { font-weight: 500; color: #333; }
-  .badge { display: inline-block; font-size: 10px; padding: 2px 7px; border-radius: 99px; font-weight: 500; }
-  .badge-green { background: #e6f9f0; color: #1a7a4a; }
-  .badge-blue { background: #e8f1fd; color: #1a4a9e; }
+  .deployment { display: flex; justify-content: space-between; align-items: flex-start; font-size: 12px; margin-bottom: 8px; padding-bottom: 8px; border-bottom: 0.5px solid #f5f5f5; }
+  .deployment:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+  .dep-left { flex: 1; min-width: 0; }
+  .dep-env { font-weight: 500; color: #333; font-size: 12px; }
+  .dep-msg { color: #888; font-size: 11px; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .dep-branch { font-size: 10px; color: #aaa; font-family: monospace; margin-top: 2px; }
+  .dep-right { text-align: right; flex-shrink: 0; margin-left: 8px; }
+  .dep-time { font-size: 11px; color: #aaa; }
+  .badge { display: inline-block; font-size: 10px; padding: 2px 7px; border-radius: 99px; font-weight: 500; margin-top: 3px; }
+  .badge-success { background: #e6f9f0; color: #1a7a4a; }
+  .badge-fail { background: #fdf0f0; color: #c0392b; }
+  .badge-progress { background: #fff8e6; color: #b07a00; }
+  .badge-idle { background: #f0f0f0; color: #888; }
   .last-push { font-size: 11px; color: #aaa; padding: 0.5rem 1.25rem; }
   .loading { color: #888; font-size: 13px; padding: 2rem; text-align: center; }
   .error { color: #c0392b; font-size: 13px; padding: 1rem; background: #fdf0f0; border-radius: 8px; }
@@ -46,12 +55,10 @@
   @media (prefers-color-scheme: dark) {
     body { background: #111; color: #eee; }
     .repo-card { background: #1c1c1e; border-color: #2c2c2e; }
-    .repo-header, .repo-stats, .repo-section { border-color: #2c2c2e; }
-    .repo-name { color: #eee; }
+    .repo-header, .repo-stats, .repo-section, .deployment { border-color: #2c2c2e; }
+    .repo-name, .dep-env, .contrib-name, .commit-msg { color: #eee; }
     .commit-sha { background: #2c2c2e; color: #aaa; }
-    .commit-msg { color: #ccc; }
-    .dep-env { color: #ccc; }
-    .contrib-name { color: #ccc; }
+    .badge-idle { background: #2c2c2e; color: #888; }
   }
 </style>
 </head>
@@ -64,17 +71,27 @@
 <script>
 const LANG_COLORS = {
   JavaScript: '#f1e05a', TypeScript: '#3178c6', Python: '#3572A5', HTML: '#e34c26',
-  CSS: '#563d7c', Vue: '#41b883', React: '#61dafb', Shell: '#89e051',
-  JSON: '#292929', Dockerfile: '#384d54', Other: '#ccc'
+  CSS: '#563d7c', Vue: '#41b883', Shell: '#89e051', JSON: '#292929',
+  Dockerfile: '#384d54', Other: '#ccc'
 };
 
 function timeAgo(dateStr) {
+  if (!dateStr) return '—';
   const diff = (Date.now() - new Date(dateStr)) / 1000;
   if (diff < 60) return 'just now';
   if (diff < 3600) return `${Math.floor(diff/60)}m ago`;
   if (diff < 86400) return `${Math.floor(diff/3600)}h ago`;
   if (diff < 2592000) return `${Math.floor(diff/86400)}d ago`;
   return new Date(dateStr).toLocaleDateString('en-AU');
+}
+
+function statusBadge(status) {
+  if (!status) return '';
+  const s = status.toLowerCase();
+  if (s === 'success') return `<span class="badge badge-success">✓ Success</span>`;
+  if (s === 'failure' || s === 'failed') return `<span class="badge badge-fail">✗ Failed</span>`;
+  if (s === 'active' || s === 'in_progress') return `<span class="badge badge-progress">⟳ In progress</span>`;
+  return `<span class="badge badge-idle">${status}</span>`;
 }
 
 function langBar(languages) {
@@ -109,17 +126,32 @@ function renderRepo(repo) {
       <span class="contrib-count">${c.contributions} commits</span>
     </div>`).join('') || '<p style="font-size:12px;color:#aaa">No contributors found</p>';
 
-  const deployments = repo.deployments.map(d => `
+  const deployments = repo.deployments.length ? repo.deployments.map(d => `
     <div class="deployment">
-      <span class="dep-env">${d.environment}</span>
-      <span>${timeAgo(d.createdAt)}</span>
-    </div>`).join('') || '<p style="font-size:12px;color:#aaa">No deployments found</p>';
+      <div class="dep-left">
+        <div class="dep-env">${d.environment || 'production'}</div>
+        ${d.commitMessage ? `<div class="dep-msg">${d.commitMessage}</div>` : ''}
+        <div class="dep-branch">⎇ ${d.branch}</div>
+      </div>
+      <div class="dep-right">
+        <div class="dep-time">${timeAgo(d.createdAt)}</div>
+        ${statusBadge(d.status)}
+      </div>
+    </div>`).join('')
+    : '<p style="font-size:12px;color:#aaa">No Cloudflare Pages project linked</p>';
+
+  const liveUrl = repo.cfProjectUrl
+    ? `<a class="repo-link" href="${repo.cfProjectUrl}" target="_blank">↗ Live</a>`
+    : '';
 
   return `
     <div class="repo-card">
       <div class="repo-header">
-        <div class="repo-name">${repo.name}</div>
-        ${repo.description ? `<div class="repo-desc">${repo.description}</div>` : ''}
+        <div>
+          <div class="repo-name">${repo.name}</div>
+          ${repo.description ? `<div class="repo-desc">${repo.description}</div>` : ''}
+        </div>
+        ${liveUrl}
       </div>
       <div class="repo-stats">
         <div class="repo-stat"><div class="repo-stat-value" style="color:#E24B4A">${repo.openIssuesCount}</div><div class="repo-stat-label">Open issues</div></div>
@@ -141,7 +173,7 @@ function renderRepo(repo) {
         ${langBar(repo.languages)}
       </div>` : ''}
       <div class="repo-section">
-        <div class="section-title">Deployments</div>
+        <div class="section-title">Cloudflare deployments</div>
         ${deployments}
       </div>
       <div class="last-push">Last push ${timeAgo(repo.lastPush)}</div>
