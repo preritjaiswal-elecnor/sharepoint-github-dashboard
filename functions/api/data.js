@@ -87,8 +87,9 @@ export async function onRequest(context) {
         contributorsRes.json()
       ]);
 
-      // Fetch lifetime commit count via contributor stats (with 202 retry)
-      const totalCommits = await fetchContributorStats(base, headers);
+      // Fetch lifetime commit count via contributor stats, fall back to contributors list
+      const totalCommits = (await fetchContributorStats(base, headers))
+        ?? (Array.isArray(contributors) ? contributors.reduce((sum, c) => sum + c.contributions, 0) : null);
 
       const prs = Array.isArray(issues) ? issues.filter(i => i.pull_request) : [];
       const openIssues = Array.isArray(issues) ? issues.filter(i => !i.pull_request) : [];
