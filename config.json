@@ -2,6 +2,9 @@
   "org": "preritjaiswal-elecnor",
   "repos": [
     "it-assets-app",
-    "it-assets-data"
+    "it-assets-data",
+    "licences-app",
+    "elecnor-website",
+    "elecnortnt"
   ]
 }
