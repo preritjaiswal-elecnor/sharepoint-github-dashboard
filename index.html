@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GitHub Dashboard — Elecnor ANZ</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f5; color: #1a1a1a; padding: 1.5rem; }
+  h1 { font-size: 20px; font-weight: 500; margin-bottom: 0.25rem; }
+  .subtitle { font-size: 13px; color: #888; margin-bottom: 1.5rem; }
+  .repo-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 16px; }
+  .repo-card { background: #fff; border: 0.5px solid #e0e0e0; border-radius: 12px; overflow: hidden; }
+  .repo-header { padding: 1rem 1.25rem 0.75rem; border-bottom: 0.5px solid #f0f0f0; }
+  .repo-name { font-size: 15px; font-weight: 600; color: #1a1a1a; margin-bottom: 4px; }
+  .repo-desc { font-size: 12px; color: #888; }
+  .repo-stats { display: flex; gap: 16px; padding: 0.75rem 1.25rem; border-bottom: 0.5px solid #f0f0f0; }
+  .repo-stat { text-align: center; }
+  .repo-stat-value { font-size: 18px; font-weight: 600; }
+  .repo-stat-label { font-size: 11px; color: #888; margin-top: 2px; }
+  .repo-section { padding: 0.75rem 1.25rem; border-bottom: 0.5px solid #f0f0f0; }
+  .repo-section:last-child { border-bottom: none; }
+  .section-title { font-size: 11px; font-weight: 500; color: #aaa; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px; }
+  .commit { display: flex; gap: 8px; align-items: flex-start; margin-bottom: 6px; font-size: 12px; }
+  .commit-sha { font-family: monospace; color: #888; flex-shrink: 0; font-size: 11px; background: #f5f5f5; padding: 1px 5px; border-radius: 4px; }
+  .commit-msg { color: #333; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .commit-author { color: #aaa; flex-shrink: 0; }
+  .contributor { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; font-size: 12px; }
+  .avatar { width: 22px; height: 22px; border-radius: 50%; }
+  .contrib-name { flex: 1; color: #333; }
+  .contrib-count { color: #888; font-size: 11px; }
+  .lang-bar { display: flex; height: 6px; border-radius: 3px; overflow: hidden; margin-bottom: 8px; }
+  .lang-legend { display: flex; flex-wrap: wrap; gap: 8px; font-size: 11px; color: #666; }
+  .lang-dot { width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; }
+  .deployment { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px; color: #555; }
+  .dep-env { font-weight: 500; color: #333; }
+  .badge { display: inline-block; font-size: 10px; padding: 2px 7px; border-radius: 99px; font-weight: 500; }
+  .badge-green { background: #e6f9f0; color: #1a7a4a; }
+  .badge-blue { background: #e8f1fd; color: #1a4a9e; }
+  .last-push { font-size: 11px; color: #aaa; padding: 0.5rem 1.25rem; }
+  .loading { color: #888; font-size: 13px; padding: 2rem; text-align: center; }
+  .error { color: #c0392b; font-size: 13px; padding: 1rem; background: #fdf0f0; border-radius: 8px; }
+  .timestamp { font-size: 11px; color: #aaa; margin-top: 1rem; }
+
+  @media (prefers-color-scheme: dark) {
+    body { background: #111; color: #eee; }
+    .repo-card { background: #1c1c1e; border-color: #2c2c2e; }
+    .repo-header, .repo-stats, .repo-section { border-color: #2c2c2e; }
+    .repo-name { color: #eee; }
+    .commit-sha { background: #2c2c2e; color: #aaa; }
+    .commit-msg { color: #ccc; }
+    .dep-env { color: #ccc; }
+    .contrib-name { color: #ccc; }
+  }
+</style>
+</head>
+<body>
+
+<h1>GitHub Dashboard</h1>
+<p class="subtitle">Elecnor ANZ — live project activity</p>
+<div id="content"><p class="loading">Loading repository data...</p></div>
+
+<script>
+const LANG_COLORS = {
+  JavaScript: '#f1e05a', TypeScript: '#3178c6', Python: '#3572A5', HTML: '#e34c26',
+  CSS: '#563d7c', Vue: '#41b883', React: '#61dafb', Shell: '#89e051',
+  JSON: '#292929', Dockerfile: '#384d54', Other: '#ccc'
+};
+
+function timeAgo(dateStr) {
+  const diff = (Date.now() - new Date(dateStr)) / 1000;
+  if (diff < 60) return 'just now';
+  if (diff < 3600) return `${Math.floor(diff/60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff/3600)}h ago`;
+  if (diff < 2592000) return `${Math.floor(diff/86400)}d ago`;
+  return new Date(dateStr).toLocaleDateString('en-AU');
+}
+
+function langBar(languages) {
+  const total = Object.values(languages).reduce((a, b) => a + b, 0);
+  if (!total) return '';
+  const entries = Object.entries(languages).sort((a, b) => b[1] - a[1]);
+  const bars = entries.map(([lang, bytes]) => {
+    const pct = (bytes / total * 100).toFixed(1);
+    const color = LANG_COLORS[lang] || LANG_COLORS.Other;
+    return `<div style="width:${pct}%;background:${color}" title="${lang} ${pct}%"></div>`;
+  }).join('');
+  const legend = entries.slice(0, 5).map(([lang, bytes]) => {
+    const pct = (bytes / total * 100).toFixed(1);
+    const color = LANG_COLORS[lang] || LANG_COLORS.Other;
+    return `<span style="display:flex;align-items:center;gap:4px"><span class="lang-dot" style="background:${color}"></span>${lang} ${pct}%</span>`;
+  }).join('');
+  return `<div class="lang-bar">${bars}</div><div class="lang-legend">${legend}</div>`;
+}
+
+function renderRepo(repo) {
+  const commits = repo.commits.map(c => `
+    <div class="commit">
+      <span class="commit-sha">${c.sha}</span>
+      <span class="commit-msg">${c.message}</span>
+      <span class="commit-author">${c.author}</span>
+    </div>`).join('') || '<p style="font-size:12px;color:#aaa">No commits found</p>';
+
+  const contributors = repo.contributors.map(c => `
+    <div class="contributor">
+      <img class="avatar" src="${c.avatar}" alt="${c.login}" loading="lazy">
+      <span class="contrib-name">${c.login}</span>
+      <span class="contrib-count">${c.contributions} commits</span>
+    </div>`).join('') || '<p style="font-size:12px;color:#aaa">No contributors found</p>';
+
+  const deployments = repo.deployments.map(d => `
+    <div class="deployment">
+      <span class="dep-env">${d.environment}</span>
+      <span>${timeAgo(d.createdAt)}</span>
+    </div>`).join('') || '<p style="font-size:12px;color:#aaa">No deployments found</p>';
+
+  return `
+    <div class="repo-card">
+      <div class="repo-header">
+        <div class="repo-name">${repo.name}</div>
+        ${repo.description ? `<div class="repo-desc">${repo.description}</div>` : ''}
+      </div>
+      <div class="repo-stats">
+        <div class="repo-stat"><div class="repo-stat-value" style="color:#E24B4A">${repo.openIssuesCount}</div><div class="repo-stat-label">Open issues</div></div>
+        <div class="repo-stat"><div class="repo-stat-value" style="color:#378ADD">${repo.openPRsCount}</div><div class="repo-stat-label">Open PRs</div></div>
+        <div class="repo-stat"><div class="repo-stat-value" style="color:#1D9E75">${repo.stars}</div><div class="repo-stat-label">Stars</div></div>
+        <div class="repo-stat"><div class="repo-stat-value" style="color:#D85A30">${repo.forks}</div><div class="repo-stat-label">Forks</div></div>
+      </div>
+      <div class="repo-section">
+        <div class="section-title">Recent commits</div>
+        ${commits}
+      </div>
+      <div class="repo-section">
+        <div class="section-title">Contributors</div>
+        ${contributors}
+      </div>
+      ${Object.keys(repo.languages).length ? `
+      <div class="repo-section">
+        <div class="section-title">Languages</div>
+        ${langBar(repo.languages)}
+      </div>` : ''}
+      <div class="repo-section">
+        <div class="section-title">Deployments</div>
+        ${deployments}
+      </div>
+      <div class="last-push">Last push ${timeAgo(repo.lastPush)}</div>
+    </div>`;
+}
+
+async function load() {
+  try {
+    const res = await fetch('/api/data');
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+
+    document.getElementById('content').innerHTML = `
+      <div class="repo-grid">
+        ${data.repos.map(renderRepo).join('')}
+      </div>
+      <p class="timestamp">Live data · ${new Date().toLocaleString('en-AU', { timeZone: 'Australia/Sydney' })} AEST</p>
+    `;
+  } catch (e) {
+    document.getElementById('content').innerHTML = `<p class="error">Failed to load data: ${e.message}</p>`;
+  }
+}
+
+load();
+</script>
+</body>
+</html>
