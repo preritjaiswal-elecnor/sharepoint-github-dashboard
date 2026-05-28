@@ -1,3 +1,20 @@
+async function fetchContributorStats(base, headers) {
+  for (let i = 0; i < 3; i++) {
+    const res = await fetch(`${base}/stats/contributors`, { headers });
+    if (res.status === 200) {
+      const data = await res.json();
+      return Array.isArray(data) ? data.reduce((sum, c) => sum + c.total, 0) : null;
+    }
+    if (res.status === 202) {
+      // GitHub is computing stats, wait and retry
+      await new Promise(r => setTimeout(r, 1500));
+    } else {
+      break;
+    }
+  }
+  return null;
+}
+
 export async function onRequest(context) {
   const githubToken = context.env.GITHUB_TOKEN;
   const cfToken = context.env.CF_API_TOKEN;
@@ -70,6 +87,9 @@ export async function onRequest(context) {
         contributorsRes.json()
       ]);
 
+      // Fetch lifetime commit count via contributor stats (with 202 retry)
+      const totalCommits = await fetchContributorStats(base, headers);
+
       const prs = Array.isArray(issues) ? issues.filter(i => i.pull_request) : [];
       const openIssues = Array.isArray(issues) ? issues.filter(i => !i.pull_request) : [];
 
@@ -109,6 +129,7 @@ export async function onRequest(context) {
         forks: repoData.forks_count || 0,
         openIssuesCount: openIssues.length,
         openPRsCount: prs.length,
+        totalCommits,
         lastPush: repoData.pushed_at,
         cfProjectName: cfProject?.name || null,
         cfProjectUrl: cfProject ? `https://${cfProject.subdomain}` : null,
