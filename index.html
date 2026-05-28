@@ -11,7 +11,10 @@
   h1 { font-size: 20px; font-weight: 500; margin-bottom: 0.25rem; }
   .subtitle { font-size: 13px; color: #888; margin-bottom: 1.5rem; }
   .repo-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 16px; }
-  .repo-card { background: #fff; border: 0.5px solid #e0e0e0; border-radius: 12px; overflow: hidden; }
+  .repo-card { background: #fff; border: 0.5px solid #e0e0e0; border-left: 3px solid #e0e0e0; border-radius: 12px; overflow: hidden; }
+  .repo-card.deploy-success { border-left-color: #4ade80; }
+  .repo-card.deploy-failed { border-left-color: #f87171; }
+  .repo-card.deploy-progress { border-left-color: #fbbf24; }
   .repo-header { padding: 1rem 1.25rem 0.75rem; border-bottom: 0.5px solid #f0f0f0; display: flex; justify-content: space-between; align-items: flex-start; }
   .repo-name { font-size: 15px; font-weight: 600; color: #1a1a1a; margin-bottom: 4px; }
   .repo-desc { font-size: 12px; color: #888; }
@@ -57,6 +60,26 @@
   .loading { color: #888; font-size: 13px; padding: 2rem; text-align: center; }
   .error { color: #c0392b; font-size: 13px; padding: 1rem; background: #fdf0f0; border-radius: 8px; }
   .timestamp { font-size: 11px; color: #aaa; margin-top: 1rem; }
+  [data-tooltip] { position: relative; cursor: default; }
+  [data-tooltip]:hover::after { content: attr(data-tooltip); position: absolute; bottom: 125%; left: 50%; transform: translateX(-50%); background: #222; color: #fff; font-size: 10px; white-space: nowrap; padding: 3px 8px; border-radius: 5px; pointer-events: none; z-index: 10; }
+  .readme-btn { font-size: 10px; font-weight: 500; color: #888; border: 1px solid #ddd; border-radius: 99px; padding: 2px 9px; background: none; cursor: pointer; flex-shrink: 0; transition: border-color 0.15s, color 0.15s; margin-left: 6px; }
+  .readme-btn:hover { border-color: #888; color: #333; }
+  .readme-modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 100; align-items: center; justify-content: center; padding: 1.5rem; }
+  .readme-modal-overlay.open { display: flex; }
+  .readme-modal { background: #fff; border-radius: 14px; max-width: 680px; width: 100%; max-height: 80vh; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 20px 60px rgba(0,0,0,0.2); }
+  .readme-modal-header { display: flex; align-items: center; justify-content: space-between; padding: 1rem 1.25rem; border-bottom: 0.5px solid #f0f0f0; }
+  .readme-modal-title { font-size: 14px; font-weight: 600; color: #1a1a1a; }
+  .readme-modal-close { background: none; border: none; font-size: 18px; color: #aaa; cursor: pointer; line-height: 1; padding: 0 4px; }
+  .readme-modal-close:hover { color: #333; }
+  .readme-modal-body { padding: 1.25rem; overflow-y: auto; font-size: 13px; line-height: 1.7; color: #333; }
+  .readme-modal-body pre { background: #f5f5f5; border-radius: 6px; padding: 0.75rem; overflow-x: auto; font-size: 11px; margin: 0.5rem 0; }
+  .readme-modal-body code { background: #f0f0f0; border-radius: 3px; padding: 1px 5px; font-size: 11px; }
+  .readme-modal-body pre code { background: none; padding: 0; }
+  .readme-modal-body h1,.readme-modal-body h2,.readme-modal-body h3 { margin: 1rem 0 0.4rem; font-size: 14px; }
+  .readme-modal-body h1 { font-size: 16px; }
+  .readme-modal-body p { margin-bottom: 0.5rem; }
+  .readme-modal-body a { color: #378ADD; }
+  .readme-loading { color: #aaa; font-size: 12px; padding: 2rem; text-align: center; }
 
   @media (prefers-color-scheme: dark) {
     body { background: #111; color: #eee; }
@@ -67,6 +90,14 @@
     .badge-idle { background: #2c2c2e; color: #888; }
     .live-url-strip { background: #0e1f15; }
     .live-url-text { color: #4ade80; }
+    .readme-modal { background: #1c1c1e; }
+    .readme-modal-header { border-color: #2c2c2e; }
+    .readme-modal-title { color: #eee; }
+    .readme-modal-body { color: #ccc; }
+    .readme-modal-body pre { background: #2c2c2e; }
+    .readme-modal-body code { background: #2c2c2e; }
+    .readme-btn { border-color: #3a3a3c; color: #888; }
+    .readme-btn:hover { border-color: #888; color: #eee; }
   }
 </style>
 </head>
@@ -85,12 +116,16 @@ const LANG_COLORS = {
 
 function timeAgo(dateStr) {
   if (!dateStr) return '—';
-  const diff = (Date.now() - new Date(dateStr)) / 1000;
-  if (diff < 60) return 'just now';
-  if (diff < 3600) return `${Math.floor(diff/60)}m ago`;
-  if (diff < 86400) return `${Math.floor(diff/3600)}h ago`;
-  if (diff < 2592000) return `${Math.floor(diff/86400)}d ago`;
-  return new Date(dateStr).toLocaleDateString('en-AU');
+  const date = new Date(dateStr);
+  const diff = (Date.now() - date) / 1000;
+  let rel;
+  if (diff < 60) rel = 'just now';
+  else if (diff < 3600) rel = `${Math.floor(diff/60)}m ago`;
+  else if (diff < 86400) rel = `${Math.floor(diff/3600)}h ago`;
+  else if (diff < 2592000) rel = `${Math.floor(diff/86400)}d ago`;
+  else rel = date.toLocaleDateString('en-AU');
+  const abs = date.toLocaleString('en-AU', { timeZone: 'Australia/Sydney', day:'numeric', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' });
+  return `<span data-tooltip="${abs}">${rel}</span>`;
 }
 
 function statusBadge(status) {
@@ -117,6 +152,15 @@ function langBar(languages) {
     return `<span style="display:flex;align-items:center;gap:4px"><span class="lang-dot" style="background:${color}"></span>${lang} ${pct}%</span>`;
   }).join('');
   return `<div class="lang-bar">${bars}</div><div class="lang-legend">${legend}</div>`;
+}
+
+function deployBorderClass(deployments) {
+  if (!deployments || !deployments.length) return '';
+  const s = (deployments[0].status || '').toLowerCase();
+  if (s === 'success') return 'deploy-success';
+  if (s === 'failure' || s === 'failed') return 'deploy-failed';
+  if (s === 'active' || s === 'in_progress') return 'deploy-progress';
+  return '';
 }
 
 function renderRepo(repo) {
@@ -152,14 +196,23 @@ function renderRepo(repo) {
     ? `<a class="repo-link" href="${repo.cfProjectUrl}" target="_blank">↗ Live</a>`
     : '';
 
+  const readmeBtn = repo.hasReadme !== false
+    ? `<button class="readme-btn" onclick="openReadme('${repo.name}', this)">README</button>`
+    : '';
+
+  const borderClass = deployBorderClass(repo.deployments);
+
   return `
-    <div class="repo-card">
+    <div class="repo-card ${borderClass}">
       <div class="repo-header">
         <div>
           <div class="repo-name">${repo.name}</div>
           ${repo.description ? `<div class="repo-desc">${repo.description}</div>` : ''}
         </div>
-        ${liveUrl}
+        <div style="display:flex;align-items:center;gap:4px;flex-shrink:0;margin-top:2px">
+          ${readmeBtn}
+          ${liveUrl}
+        </div>
       </div>
       <div class="repo-stats">
         <div class="repo-stat"><div class="repo-stat-value" style="color:#E24B4A">${repo.openIssuesCount}</div><div class="repo-stat-label">Open issues</div></div>
@@ -211,7 +264,59 @@ async function load() {
   }
 }
 
-load();
+<!-- README modal -->
+<div class="readme-modal-overlay" id="readmeOverlay" onclick="if(event.target===this)closeReadme()">
+  <div class="readme-modal">
+    <div class="readme-modal-header">
+      <span class="readme-modal-title" id="readmeTitle">README</span>
+      <button class="readme-modal-close" onclick="closeReadme()">✕</button>
+    </div>
+    <div class="readme-modal-body" id="readmeBody"><p class="readme-loading">Loading…</p></div>
+  </div>
+</div>
+
+<script>
+// Minimal markdown → HTML (headings, bold, italic, code, pre, links, lists)
+function mdToHtml(md) {
+  let h = md
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/```([\s\S]*?)```/g, (_,c)=>`<pre><code>${c.trim()}</code></pre>`)
+    .replace(/`([^`]+)`/g, (_,c)=>`<code>${c}</code>`)
+    .replace(/^#{3} (.+)$/gm, '<h3>$1</h3>')
+    .replace(/^#{2} (.+)$/gm, '<h2>$1</h2>')
+    .replace(/^# (.+)$/gm, '<h1>$1</h1>')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>')
+    .replace(/^[-*] (.+)$/gm, '<li>$1</li>')
+    .replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>')
+    .replace(/\n\n/g, '</p><p>')
+    .replace(/^(?!<[huplo])/gm, '');
+  return `<p>${h}</p>`;
+}
+
+async function openReadme(repoName, btn) {
+  document.getElementById('readmeTitle').textContent = `${repoName} — README`;
+  document.getElementById('readmeBody').innerHTML = '<p class="readme-loading">Loading…</p>';
+  document.getElementById('readmeOverlay').classList.add('open');
+  try {
+    const res = await fetch(`/api/readme?repo=${encodeURIComponent(repoName)}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    if (data.error || !data.content) throw new Error(data.error || 'No README found');
+    const raw = atob(data.content.replace(/\s/g,''));
+    document.getElementById('readmeBody').innerHTML = mdToHtml(raw);
+  } catch(e) {
+    document.getElementById('readmeBody').innerHTML = `<p style="color:#aaa;font-size:12px">Could not load README: ${e.message}</p>`;
+  }
+}
+
+function closeReadme() {
+  document.getElementById('readmeOverlay').classList.remove('open');
+}
+
+document.addEventListener('keydown', e => { if(e.key==='Escape') closeReadme(); });
 </script>
+
 </body>
 </html>
