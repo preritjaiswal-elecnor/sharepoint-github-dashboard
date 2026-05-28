@@ -15,7 +15,8 @@
   .repo-header { padding: 1rem 1.25rem 0.75rem; border-bottom: 0.5px solid #f0f0f0; display: flex; justify-content: space-between; align-items: flex-start; }
   .repo-name { font-size: 15px; font-weight: 600; color: #1a1a1a; margin-bottom: 4px; }
   .repo-desc { font-size: 12px; color: #888; }
-  .repo-link { font-size: 11px; color: #378ADD; text-decoration: none; flex-shrink: 0; margin-top: 2px; }
+  .repo-link { font-size: 11px; color: #4ade80; text-decoration: none; flex-shrink: 0; margin-top: 2px; border: 1.5px solid #4ade80; border-radius: 99px; padding: 3px 10px; display: inline-flex; align-items: center; gap: 4px; font-weight: 500; transition: background 0.15s, color 0.15s; }
+  .repo-link:hover { background: #4ade80; color: #111; }
   .repo-stats { display: flex; gap: 16px; padding: 0.75rem 1.25rem; border-bottom: 0.5px solid #f0f0f0; }
   .repo-stat { text-align: center; }
   .repo-stat-value { font-size: 18px; font-weight: 600; }
@@ -48,6 +49,11 @@
   .badge-progress { background: #fff8e6; color: #b07a00; }
   .badge-idle { background: #f0f0f0; color: #888; }
   .last-push { font-size: 11px; color: #aaa; padding: 0.5rem 1.25rem; }
+  .live-url-strip { display: flex; align-items: center; gap: 8px; padding: 0.6rem 1.25rem; border-bottom: 0.5px solid #f0f0f0; background: #f9fffe; }
+  .live-url-text { font-size: 11px; font-family: monospace; color: #2a7a4a; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .copy-btn { font-size: 10px; font-weight: 500; color: #4ade80; border: 1.5px solid #4ade80; border-radius: 99px; padding: 2px 9px; background: none; cursor: pointer; flex-shrink: 0; transition: background 0.15s, color 0.15s; }
+  .copy-btn:hover { background: #4ade80; color: #111; }
+  .copy-btn.copied { background: #4ade80; color: #111; border-color: #4ade80; }
   .loading { color: #888; font-size: 13px; padding: 2rem; text-align: center; }
   .error { color: #c0392b; font-size: 13px; padding: 1rem; background: #fdf0f0; border-radius: 8px; }
   .timestamp { font-size: 11px; color: #aaa; margin-top: 1rem; }
@@ -59,6 +65,8 @@
     .repo-name, .dep-env, .contrib-name, .commit-msg { color: #eee; }
     .commit-sha { background: #2c2c2e; color: #aaa; }
     .badge-idle { background: #2c2c2e; color: #888; }
+    .live-url-strip { background: #0e1f15; }
+    .live-url-text { color: #4ade80; }
   }
 </style>
 </head>
@@ -159,6 +167,11 @@ function renderRepo(repo) {
         <div class="repo-stat"><div class="repo-stat-value" style="color:#1D9E75">${repo.stars}</div><div class="repo-stat-label">Stars</div></div>
         <div class="repo-stat"><div class="repo-stat-value" style="color:#D85A30">${repo.forks}</div><div class="repo-stat-label">Forks</div></div>
       </div>
+      ${repo.cfProjectUrl ? `
+      <div class="live-url-strip">
+        <span class="live-url-text">${repo.cfProjectUrl}</span>
+        <button class="copy-btn" onclick="(function(btn,url){navigator.clipboard.writeText(url).then(function(){btn.textContent='Copied!';btn.classList.add('copied');setTimeout(function(){btn.textContent='Copy';btn.classList.remove('copied');},1800)});})(this,'${repo.cfProjectUrl}')">Copy</button>
+      </div>` : ''}
       <div class="repo-section">
         <div class="section-title">Recent commits</div>
         ${commits}
