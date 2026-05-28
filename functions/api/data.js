@@ -1,6 +1,7 @@
 export async function onRequest(context) {
-  const token = context.env.GITHUB_TOKEN;
-  const origin = context.request.headers.get('Origin') || '*';
+  const githubToken = context.env.GITHUB_TOKEN;
+  const cfToken = context.env.CF_API_TOKEN;
+  const cfAccountId = context.env.CF_ACCOUNT_ID;
 
   try {
     // Fetch config.json from the same repo
@@ -8,7 +9,7 @@ export async function onRequest(context) {
       'https://api.github.com/repos/preritjaiswal-elecnor/sharepoint-github-dashboard/contents/config.json',
       {
         headers: {
-          Authorization: `Bearer ${token}`,
+          Authorization: `Bearer ${githubToken}`,
           Accept: 'application/vnd.github.raw+json',
           'User-Agent': 'elecnor-github-dashboard'
         }
@@ -17,34 +18,75 @@ export async function onRequest(context) {
     const config = await configRes.json();
     const { org, repos } = config;
 
+    // Fetch all Cloudflare Pages projects once
+    const cfPagesRes = await fetch(
+      `https://api.cloudflare.com/client/v4/accounts/${cfAccountId}/pages/projects?per_page=25`,
+      {
+        headers: {
+          Authorization: `Bearer ${cfToken}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+    const cfPages = await cfPagesRes.json();
+    const cfProjects = cfPages.result || [];
+
     const results = await Promise.all(repos.map(async (repo) => {
       const headers = {
-        Authorization: `Bearer ${token}`,
+        Authorization: `Bearer ${githubToken}`,
         Accept: 'application/vnd.github+json',
         'User-Agent': 'elecnor-github-dashboard'
       };
       const base = `https://api.github.com/repos/${org}/${repo}`;
 
-      const [repoRes, commitsRes, issuesRes, deploymentsRes, languagesRes, contributorsRes] = await Promise.all([
+      const [repoRes, commitsRes, issuesRes, languagesRes, contributorsRes] = await Promise.all([
         fetch(base, { headers }),
         fetch(`${base}/commits?per_page=10`, { headers }),
         fetch(`${base}/issues?state=open&per_page=20`, { headers }),
-        fetch(`${base}/deployments?per_page=5`, { headers }),
         fetch(`${base}/languages`, { headers }),
         fetch(`${base}/contributors?per_page=10`, { headers })
       ]);
 
-      const [repoData, commits, issues, deployments, languages, contributors] = await Promise.all([
+      const [repoData, commits, issues, languages, contributors] = await Promise.all([
         repoRes.json(),
         commitsRes.json(),
         issuesRes.json(),
-        deploymentsRes.json(),
         languagesRes.json(),
         contributorsRes.json()
       ]);
 
       const prs = Array.isArray(issues) ? issues.filter(i => i.pull_request) : [];
       const openIssues = Array.isArray(issues) ? issues.filter(i => !i.pull_request) : [];
+
+      // Match Cloudflare Pages project by repo name
+      const cfProject = cfProjects.find(p =>
+        p.name === repo ||
+        p.source?.config?.repo_name === repo ||
+        p.source?.config?.repo_name?.endsWith(`/${repo}`)
+      );
+
+      let deployments = [];
+      if (cfProject) {
+        const depRes = await fetch(
+          `https://api.cloudflare.com/client/v4/accounts/${cfAccountId}/pages/projects/${cfProject.name}/deployments?per_page=5`,
+          {
+            headers: {
+              Authorization: `Bearer ${cfToken}`,
+              'Content-Type': 'application/json'
+            }
+          }
+        );
+        const depData = await depRes.json();
+        deployments = (depData.result || []).slice(0, 5).map(d => ({
+          id: d.id?.slice(0, 8),
+          environment: d.environment,
+          status: d.latest_stage?.status || d.stages?.[d.stages.length - 1]?.status || 'unknown',
+          createdAt: d.created_on,
+          url: d.url,
+          branch: d.deployment_trigger?.metadata?.branch || 'main',
+          commitMessage: d.deployment_trigger?.metadata?.commit_message?.split('\n')[0] || ''
+        }));
+      }
 
       return {
         name: repo,
@@ -54,17 +96,15 @@ export async function onRequest(context) {
         openIssuesCount: openIssues.length,
         openPRsCount: prs.length,
         lastPush: repoData.pushed_at,
+        cfProjectName: cfProject?.name || null,
+        cfProjectUrl: cfProject ? `https://${cfProject.subdomain}` : null,
         commits: Array.isArray(commits) ? commits.slice(0, 5).map(c => ({
           sha: c.sha?.slice(0, 7),
           message: c.commit?.message?.split('\n')[0],
           author: c.commit?.author?.name,
           date: c.commit?.author?.date
         })) : [],
-        deployments: Array.isArray(deployments) ? deployments.slice(0, 3).map(d => ({
-          environment: d.environment,
-          createdAt: d.created_at,
-          status: d.task
-        })) : [],
+        deployments,
         languages,
         contributors: Array.isArray(contributors) ? contributors.slice(0, 5).map(c => ({
           login: c.login,
@@ -77,7 +117,7 @@ export async function onRequest(context) {
     return new Response(JSON.stringify({ org, repos: results, fetchedAt: new Date().toISOString() }), {
       headers: {
         'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': origin,
+        'Access-Control-Allow-Origin': '*',
         'Cache-Control': 'public, max-age=300'
       }
     });
